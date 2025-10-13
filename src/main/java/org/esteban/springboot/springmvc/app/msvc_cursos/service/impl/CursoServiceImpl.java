@@ -2,9 +2,12 @@ package org.esteban.springboot.springmvc.app.msvc_cursos.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.esteban.springboot.springmvc.app.msvc_cursos.client.UsuarioClientRest;
+import org.esteban.springboot.springmvc.app.msvc_cursos.model.Usuario;
 import org.esteban.springboot.springmvc.app.msvc_cursos.model.dto.CursoRequestDto;
 import org.esteban.springboot.springmvc.app.msvc_cursos.model.dto.CursoResponseDto;
 import org.esteban.springboot.springmvc.app.msvc_cursos.model.entities.Curso;
+import org.esteban.springboot.springmvc.app.msvc_cursos.model.entities.CursoUsuario;
 import org.esteban.springboot.springmvc.app.msvc_cursos.repository.CursoRepository;
 import org.esteban.springboot.springmvc.app.msvc_cursos.service.CursoService;
 import org.springframework.stereotype.Service;
@@ -20,6 +23,7 @@ import java.util.stream.Collectors;
 public class CursoServiceImpl implements CursoService {
 
     private final CursoRepository cursoRepository;
+    private final UsuarioClientRest usuarioClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -73,6 +77,78 @@ public class CursoServiceImpl implements CursoService {
                     return true;
                 })
                 .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<CursoResponseDto> findByIdConUsuarios(Long id) {
+        log.info("Buscando curso con id: {} incluyendo usuarios", id);
+        return cursoRepository.findById(id)
+                .map(curso -> {
+                    CursoResponseDto dto = mapToResponseDto(curso);
+                    if (!curso.getCursoUsuarios().isEmpty()) {
+                        List<Long> ids = curso.getCursoUsuarios().stream()
+                                .map(CursoUsuario::getUsuarioId)
+                                .collect(Collectors.toList());
+                        List<Usuario> usuarios = usuarioClient.obtenerAlumnosPorCurso(ids);
+                        dto.setUsuarios(usuarios);
+                    }
+                    return dto;
+                });
+    }
+
+    @Override
+    @Transactional
+    public Optional<Usuario> asignarUsuario(Long cursoId, Long usuarioId) {
+        log.info("Asignando usuario {} al curso {}", usuarioId, cursoId);
+        return cursoRepository.findById(cursoId)
+                .map(curso -> {
+                    Usuario usuario = usuarioClient.detalle(usuarioId);
+                    CursoUsuario cursoUsuario = new CursoUsuario();
+                    cursoUsuario.setUsuarioId(usuarioId);
+                    curso.addCursoUsuario(cursoUsuario);
+                    cursoRepository.save(curso);
+                    log.info("Usuario asignado exitosamente al curso");
+                    return usuario;
+                });
+    }
+
+    @Override
+    @Transactional
+    public Optional<Usuario> crearUsuario(Long cursoId, Usuario usuario) {
+        log.info("Creando usuario y asignándolo al curso {}", cursoId);
+        return cursoRepository.findById(cursoId)
+                .map(curso -> {
+                    Usuario nuevoUsuario = usuarioClient.detalle(usuario.getId());
+                    CursoUsuario cursoUsuario = new CursoUsuario();
+                    cursoUsuario.setUsuarioId(nuevoUsuario.getId());
+                    curso.addCursoUsuario(cursoUsuario);
+                    cursoRepository.save(curso);
+                    log.info("Usuario creado y asignado exitosamente al curso");
+                    return nuevoUsuario;
+                });
+    }
+
+    @Override
+    @Transactional
+    public Optional<Usuario> desasignarUsuario(Long cursoId, Long usuarioId) {
+        log.info("Desasignando usuario {} del curso {}", usuarioId, cursoId);
+        return cursoRepository.findById(cursoId)
+                .map(curso -> {
+                    Usuario usuario = usuarioClient.detalle(usuarioId);
+                    curso.deleteCursoUsuarioPorId(usuarioId);
+                    cursoRepository.save(curso);
+                    log.info("Usuario desasignado exitosamente del curso");
+                    return usuario;
+                });
+    }
+
+    @Override
+    @Transactional
+    public void eliminarCursoUsuarioPorId(Long usuarioId) {
+        log.info("Eliminando usuario {} de todos los cursos", usuarioId);
+        cursoRepository.eliminarCursoUsuarioPorId(usuarioId);
+        log.info("Usuario eliminado de todos los cursos exitosamente");
     }
 
     private CursoResponseDto mapToResponseDto(Curso curso) {
