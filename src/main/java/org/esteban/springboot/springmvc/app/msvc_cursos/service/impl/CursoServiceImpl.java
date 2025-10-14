@@ -119,7 +119,7 @@ public class CursoServiceImpl implements CursoService {
         log.info("Creando usuario y asignándolo al curso {}", cursoId);
         return cursoRepository.findById(cursoId)
                 .map(curso -> {
-                    Usuario nuevoUsuario = usuarioClient.detalle(usuario.getId());
+                    Usuario nuevoUsuario = usuarioClient.crear(usuario);
                     CursoUsuario cursoUsuario = new CursoUsuario();
                     cursoUsuario.setUsuarioId(nuevoUsuario.getId());
                     curso.addCursoUsuario(cursoUsuario);
